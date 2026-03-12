@@ -25,7 +25,13 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    sh 'sonar-scanner'
+                    sh '''
+                    sonar-scanner \
+                      -Dsonar.projectKey=fullwebapp \
+                      -Dsonar.sources=frontend,backend \
+                      -Dsonar.exclusions=**/node_modules/**,helm/** \
+                      -Dsonar.sourceEncoding=UTF-8
+                    '''
                 }
             }
         }
@@ -90,7 +96,7 @@ pipeline {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-jenkin-creds'
+                    credentialsId: 'aws-jenkin-cred'
                 ]]) {
                     sh '''
                     aws ecr get-login-password --region ${AWS_REGION} | \\
@@ -127,8 +133,8 @@ pipeline {
                 ]]) {
                     sh '''
                     aws eks update-kubeconfig \\
-                    --region ${AWS_REGION} \\
-                    --name devops-cluster
+                      --region ${AWS_REGION} \\
+                      --name devops-cluster
 
                     helm upgrade --install fullstack ./helm/fullstack-chart \\
                       --set frontend.image.repository=${ECR_FRONTEND} \\
