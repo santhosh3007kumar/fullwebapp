@@ -96,7 +96,7 @@ pipeline {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-jenkin-cred'
+                    credentialsId: 'aws-jenkins-cred'
                 ]]) {
                     sh '''
                     aws ecr get-login-password --region ${AWS_REGION} | \\
@@ -129,7 +129,7 @@ pipeline {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-jenkin-cred'
+                    credentialsId: 'aws-jenkins-cred'
                 ]]) {
                     sh '''
                     aws eks update-kubeconfig \\
