@@ -1,0 +1,146 @@
+pipeline {
+    agent any
+    
+    environment {
+        AWS_ACCOUNT_ID = "352311919031"
+        AWS_REGION = "ap-southeast-1"
+        ECR_FRONTEND = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/frontend-repo"
+        ECR_BACKEND = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/backend-repo"
+    }
+    
+    tools {
+        nodejs 'Node18'
+    }
+    
+    stages {
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main',
+                     url: 'https://github.com/santhosh3007kumar/fullwebapp.git'
+                sh 'ls -la frontend/ backend/ helm/'
+            }
+        }
+        
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh 'sonar-scanner'
+                }
+            }
+        }
+        
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+        
+        stage('Install Dependencies') {
+            parallel {
+                stage('Frontend Install') {
+                    steps { dir('frontend') { sh 'npm ci --only=production' } }
+                }
+                stage('Backend Install') {
+                    steps { dir('backend') { sh 'npm ci --only=production' } }
+                }
+            }
+        }
+        
+        stage('Build Frontend') {
+            steps { dir('frontend') { sh 'npm run build' } }
+        }
+        
+        stage('Docker Build') {
+            steps {
+                script {
+                    sh '''
+                        docker build -f frontend/Dockerfile -t frontend:latest .
+                        docker build -f backend/Dockerfile -t backend:latest .
+                    '''
+                }
+            }
+        }
+        
+        stage('Trivy Security Scan') {
+            steps {
+                script {
+                    sh '''
+                        docker run --rm --privileged \\
+                          -v /var/run/docker.sock:/var/run/docker.sock \\
+                          aquasec/trivy:latest image \\
+                          --exit-code 0 --no-progress --severity HIGH,CRITICAL \\
+                          frontend:latest || true
+                          
+                        docker run --rm --privileged \\
+                          -v /var/run/docker.sock:/var/run/docker.sock \\
+                          aquasec/trivy:latest image \\
+                          --exit-code 0 --no-progress --severity HIGH,CRITICAL \\
+                          backend:latest || true
+                    '''
+                }
+            }
+        }
+        
+        stage('Login to AWS ECR') {
+            steps {
+                script {
+                    sh '''
+                        aws ecr get-login-password --region ${AWS_REGION} | 
+                        docker login --username AWS --password-stdin ${ECR_FRONTEND}
+                    '''
+                }
+            }
+        }
+        
+        stage('Tag Docker Images') {
+            steps {
+                sh '''
+                    docker tag frontend:latest ${ECR_FRONTEND}:latest
+                    docker tag backend:latest ${ECR_BACKEND}:latest
+                '''
+            }
+        }
+        
+        stage('Push Images to ECR') {
+            steps {
+                sh '''
+                    docker push ${ECR_FRONTEND}:latest
+                    docker push ${ECR_BACKEND}:latest
+                '''
+            }
+        }
+        
+        stage('Deploy to EKS using Helm') {
+            steps {
+                script {
+                    sh '''
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name mean-prod-cluster
+                        helm upgrade --install fullstack ./helm/fullstack-chart \\
+                          --set frontend.image="${ECR_FRONTEND}:latest" \\
+                          --set backend.image="${ECR_BACKEND}:latest" \\
+                          --namespace production --create-namespace \\
+                          --wait --timeout=5m
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "🚀 PRODUCTION DEPLOYMENT SUCCESSFUL!"
+            sh '''
+                kubectl get svc -n production
+                kubectl get deployments -n production
+            '''
+        }
+        failure {
+            echo "❌ Pipeline Failed - Check logs above!"
+        }
+        always {
+            sh 'docker system prune -f'
+        }
+    }
+}

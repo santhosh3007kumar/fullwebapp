@@ -1,0 +1,14 @@
+replicaCount: 2
+
+frontend:
+  image: "123456789.dkr.ecr.ap-southeast-1.amazonaws.com/frontend-repo:latest"
+  port: 80
+  replicas: 2
+
+backend:
+  image: "123456789.dkr.ecr.ap-southeast-1.amazonaws.com/backend-repo:latest"
+  port: 3001
+  replicas: 3
+
+service:
+  type: LoadBalancer
