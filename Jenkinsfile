@@ -132,35 +132,33 @@ pipeline {
                     credentialsId: 'aws_ecr'
                 ]]) {
                     sh """
-                        # Login to ECR
-                        aws ecr get-login-password --region ${AWS_REGION} | \
-                        docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-
-                        # Update kubeconfig for EKS
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
                         aws eks update-kubeconfig --region ${AWS_REGION} --name devops-cluster
-
-                        # Deploy with Helm
-                        helm repo add stable https://charts.helm.sh/stable || true
-                        helm repo update
-                        helm upgrade --install fullstack ./helm/fullstack-chart \
-                          -f ./helm/fullstack-chart/values.yaml \
-                          --set frontend.image.tag="${BUILD_NUMBER}" \
-                          --set backend.image.tag="${BUILD_NUMBER}" \
-                          --namespace production --create-namespace \
-                          --wait --timeout=15m --debug
+                        helm upgrade --install fullstack ./helm/fullstack-chart -f ./helm/fullstack-chart/values.yaml --set frontend.image.tag="${BUILD_NUMBER}" --set backend.image.tag="${BUILD_NUMBER}" --namespace production --create-namespace --wait --timeout=15m --debug
+                        
+                        # Show results immediately
+                        kubectl get pods -n production
+                        kubectl get svc -n production
                     """
                 }
             }
         }
+
     }
 
     post {
         success {
             echo "🚀 Deployment Successful"
-            sh '''
-            kubectl get pods -n production
-            kubectl get svc -n production
-            '''
+            withCredentials([[
+                $class: 'AmazonWebServicesCredentialsBinding',
+                credentialsId: 'aws_ecr'
+            ]]) {
+                sh '''
+                aws eks update-kubeconfig --region ap-southeast-1 --name devops-cluster
+                kubectl get pods -n production
+                kubectl get svc -n production
+                '''
+            }
         }
         failure {
             echo "❌ Pipeline Failed"
@@ -169,4 +167,4 @@ pipeline {
             sh 'docker system prune -f'
         }
     }
-}
+
