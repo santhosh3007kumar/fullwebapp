@@ -7,13 +7,14 @@ pipeline {
 
     environment {
         AWS_ACCOUNT_ID = "352311919031"
-        AWS_REGION = "ap-southeast-1"
-        ECR_FRONTEND = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/frontend-repo"
-        ECR_BACKEND  = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/backend-repo"
-        IMAGE_TAG = "${BUILD_NUMBER}"
+        AWS_REGION     = "ap-southeast-1"
+        ECR_FRONTEND   = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/frontend-repo"
+        ECR_BACKEND    = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/backend-repo"
+        IMAGE_TAG      = "${BUILD_NUMBER}"
     }
 
     stages {
+
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
@@ -84,10 +85,9 @@ pipeline {
             steps {
                 sh '''
                 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
-                aquasec/trivy image --exit-code 0 --severity HIGH,CRITICAL frontend:${IMAGE_TAG}
-
+                    aquasec/trivy image --exit-code 0 --severity HIGH,CRITICAL frontend:${IMAGE_TAG}
                 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
-                aquasec/trivy image --exit-code 0 --severity HIGH,CRITICAL backend:${IMAGE_TAG}
+                    aquasec/trivy image --exit-code 0 --severity HIGH,CRITICAL backend:${IMAGE_TAG}
                 '''
             }
         }
@@ -100,8 +100,7 @@ pipeline {
                 ]]) {
                     sh '''
                     aws ecr get-login-password --region ${AWS_REGION} | \\
-                    docker login --username AWS --password-stdin \\
-                    ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
                     '''
                 }
             }
@@ -132,38 +131,33 @@ pipeline {
                     credentialsId: 'aws_ecr'
                 ]]) {
                     sh """
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                        aws eks update-kubeconfig --region ${AWS_REGION} --name devops-cluster
-                        helm upgrade --install fullstack ./helm/fullstack-chart \\
-                          -f ./helm/fullstack-chart/values.yaml \\
-                          --set frontend.image.tag="${BUILD_NUMBER}" \\
-                          --set backend.image.tag="${BUILD_NUMBER}" \\
-                          --namespace production --create-namespace \\
-                          --wait --timeout=15m --debug
-                        
-                        # Show results immediately
-                        kubectl get pods -n production
-                        kubectl get svc -n production
+                    # Export credentials for subprocesses
+                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+                    export AWS_DEFAULT_REGION=$AWS_REGION
+
+                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    aws eks update-kubeconfig --region ${AWS_REGION} --name devops-cluster
+
+                    helm upgrade --install fullstack ./helm/fullstack-chart \\
+                        -f ./helm/fullstack-chart/values.yaml \\
+                        --set frontend.image.tag="${BUILD_NUMBER}" \\
+                        --set backend.image.tag="${BUILD_NUMBER}" \\
+                        --namespace production --create-namespace \\
+                        --wait --timeout=15m --debug
+
+                    # Show deployed resources
+                    kubectl get pods -n production
+                    kubectl get svc -n production
                     """
                 }
             }
         }
-
     }
 
     post {
         success {
             echo "🚀 Deployment Successful"
-            withCredentials([[
-                $class: 'AmazonWebServicesCredentialsBinding',
-                credentialsId: 'aws_ecr'
-            ]]) {
-                sh '''
-                aws eks update-kubeconfig --region ap-southeast-1 --name devops-cluster
-                kubectl get pods -n production
-                kubectl get svc -n production
-                '''
-            }
         }
         failure {
             echo "❌ Pipeline Failed"
