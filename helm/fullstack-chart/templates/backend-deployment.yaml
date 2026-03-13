@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: {{ .Release.Name }}-backend
 spec:
-  replicas: {{ .Values.backend.replicas }}
+  replicas: {{ .Values.backend.replicaCount | default 2 }}
   selector:
     matchLabels:
       app: backend
@@ -14,18 +14,8 @@ spec:
     spec:
       containers:
       - name: backend
-        image: {{ .Values.backend.image }}
+        image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
         ports:
-        - containerPort: {{ .Values.backend.port }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ .Release.Name }}-backend
-spec:
-  type: ClusterIP
-  ports:
-  - port: 3001
-    targetPort: {{ .Values.backend.port }}
-  selector:
-    app: backend
+        - containerPort: 8080        # ← ADD THIS!
+          protocol: TCP
+        imagePullPolicy: {{ .Values.backend.image.pullPolicy }}

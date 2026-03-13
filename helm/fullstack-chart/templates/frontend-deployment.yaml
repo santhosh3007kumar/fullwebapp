@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: {{ .Release.Name }}-frontend
 spec:
-  replicas: {{ .Values.frontend.replicas }}
+  replicas: {{ .Values.frontend.replicaCount | default 2 }}
   selector:
     matchLabels:
       app: frontend
@@ -14,18 +14,8 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: {{ .Values.frontend.image }}
+        image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
         ports:
-        - containerPort: {{ .Values.frontend.port }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ .Release.Name }}-frontend
-spec:
-  type: ClusterIP
-  ports:
-  - port: 80
-    targetPort: {{ .Values.frontend.port }}
-  selector:
-    app: frontend
+        - containerPort: 80          # ← ADD THIS!
+          protocol: TCP
+        imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
