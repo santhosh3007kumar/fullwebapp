@@ -134,7 +134,12 @@ pipeline {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
                         aws eks update-kubeconfig --region ${AWS_REGION} --name devops-cluster
-                        helm upgrade --install fullstack ./helm/fullstack-chart -f ./helm/fullstack-chart/values.yaml --set frontend.image.tag="${BUILD_NUMBER}" --set backend.image.tag="${BUILD_NUMBER}" --namespace production --create-namespace --wait --timeout=15m --debug
+                        helm upgrade --install fullstack ./helm/fullstack-chart \\
+                          -f ./helm/fullstack-chart/values.yaml \\
+                          --set frontend.image.tag="${BUILD_NUMBER}" \\
+                          --set backend.image.tag="${BUILD_NUMBER}" \\
+                          --namespace production --create-namespace \\
+                          --wait --timeout=15m --debug
                         
                         # Show results immediately
                         kubectl get pods -n production
@@ -167,4 +172,4 @@ pipeline {
             sh 'docker system prune -f'
         }
     }
-
+}
