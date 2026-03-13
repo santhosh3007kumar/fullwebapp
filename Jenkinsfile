@@ -17,7 +17,7 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                     url: 'https://github.com/santhosh3007kumar/fullwebapp.git'
+                    url: 'https://github.com/santhosh3007kumar/fullwebapp.git'
                 sh 'ls -la'
             }
         }
@@ -127,27 +127,25 @@ pipeline {
 
         stage('Deploy to EKS using Helm') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws_ecr'
-                ]]) {
-                    sh '''
-                    aws eks update-kubeconfig \\
-                      --region ${AWS_REGION} \\
-                      --name devops-cluster
-
-                    helm upgrade --install fullstack ./helm/fullstack-chart \\
-                      --set frontend.image.repository=${ECR_FRONTEND} \\
-                      --set frontend.image.tag=${IMAGE_TAG} \\
-                      --set backend.image.repository=${ECR_BACKEND} \\
-                      --set backend.image.tag=${IMAGE_TAG} \\
-                      --namespace production \\
-                      --create-namespace \\
-                      --wait --timeout=5m
-                    '''
+                script {
+                    sh """
+                        aws eks update-kubeconfig --region ap-southeast-1 --name devops-cluster
+                        helm repo add stable https://charts.helm.sh/stable || true
+                        helm repo update
+                        
+                        # 15m timeout + correct nested structure
+                        helm upgrade --install fullstack ./helm/fullstack-chart \\
+                          --set frontend.image.repository=352311919031.dkr.ecr.ap-southeast-1.amazonaws.com/frontend-repo \\
+                          --set frontend.image.tag=${BUILD_NUMBER} \\
+                          --set backend.image.repository=352311919031.dkr.ecr.ap-southeast-1.amazonaws.com/backend-repo \\
+                          --set backend.image.tag=${BUILD_NUMBER} \\
+                          --namespace production --create-namespace \\
+                          --wait --timeout=15m --debug
+                    """
                 }
             }
         }
+
     }
 
     post {

@@ -1,14 +1,43 @@
-replicaCount: 2
+# values.yaml - Fullstack Helm Chart
 
+# Frontend image settings
 frontend:
-  image: "123456789.dkr.ecr.ap-southeast-1.amazonaws.com/frontend-repo:latest"
-  port: 80
-  replicas: 2
+  image:
+    repository: 352311919031.dkr.ecr.ap-southeast-1.amazonaws.com/frontend-repo
+    tag: "latest"        # Will be overridden by Jenkins BUILD_NUMBER
+    pullPolicy: IfNotPresent
 
+# Backend image settings
 backend:
-  image: "123456789.dkr.ecr.ap-southeast-1.amazonaws.com/backend-repo:latest"
-  port: 3001
-  replicas: 3
+  image:
+    repository: 352311919031.dkr.ecr.ap-southeast-1.amazonaws.com/backend-repo
+    tag: "latest"        # Will be overridden by Jenkins BUILD_NUMBER
+    pullPolicy: IfNotPresent
 
+# Optional: resource requests/limits
+resources:
+  frontend:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  backend:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+# Optional: service type & port
 service:
-  type: LoadBalancer
+  type: ClusterIP
+  frontendPort: 80
+  backendPort: 3000
+
+# Optional: replicas
+replicaCount:
+  frontend: 2
+  backend: 2
