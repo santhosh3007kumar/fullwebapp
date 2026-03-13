@@ -127,25 +127,31 @@ pipeline {
 
         stage('Deploy to EKS using Helm') {
             steps {
-                script {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws_ecr'
+                ]]) {
                     sh """
-                        aws eks update-kubeconfig --region ap-southeast-1 --name devops-cluster
+                        # Login to ECR
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+                        # Update kubeconfig for EKS
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name devops-cluster
+
+                        # Deploy with Helm
                         helm repo add stable https://charts.helm.sh/stable || true
                         helm repo update
-                        
-                        # 15m timeout + correct nested structure
-                        helm upgrade --install fullstack ./helm/fullstack-chart \\
-                          --set frontend.image.repository=352311919031.dkr.ecr.ap-southeast-1.amazonaws.com/frontend-repo \\
-                          --set frontend.image.tag=${BUILD_NUMBER} \\
-                          --set backend.image.repository=352311919031.dkr.ecr.ap-southeast-1.amazonaws.com/backend-repo \\
-                          --set backend.image.tag=${BUILD_NUMBER} \\
-                          --namespace production --create-namespace \\
+                        helm upgrade --install fullstack ./helm/fullstack-chart \
+                          -f ./helm/fullstack-chart/values.yaml \
+                          --set frontend.image.tag="${BUILD_NUMBER}" \
+                          --set backend.image.tag="${BUILD_NUMBER}" \
+                          --namespace production --create-namespace \
                           --wait --timeout=15m --debug
                     """
                 }
             }
         }
-
     }
 
     post {
